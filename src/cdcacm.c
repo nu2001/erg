@@ -19,10 +19,18 @@
  */
 
 #include <stdlib.h>
-#include <libopencm3/usb/usbd.h>
-#include <libopencm3/usb/cdc.h>
+#include <string.h>
+
 #include <libopencm3/cm3/scb.h>
-#include <cdcacm.h>
+#include <libopencm3/usb/cdc.h>
+#include <libopencm3/usb/usbd.h>
+
+#include "cdcacm.h"
+
+#define BUF_SIZE 1024
+static int read_buf_len = 0;
+static char read_buf[BUF_SIZE];
+static int read_something = 0;
 
 static const struct usb_device_descriptor dev = {
 	.bLength = USB_DT_DEVICE_SIZE,
@@ -196,22 +204,20 @@ static int cdcacm_control_request(usbd_device *usbd_dev,
 
 static void cdcacm_data_rx_cb(usbd_device *usbd_dev, uint8_t ep)
 {
-	(void)ep;
+  (void)ep;
 
-	char buf[64];
-	int len = usbd_ep_read_packet(usbd_dev, 0x01, buf, 64);
-	int i;
+  char buf[64];
+  int len = usbd_ep_read_packet(usbd_dev, 0x01, buf, 64);
 
-	/* to upper */
-	for (i=0; i<len; i++) {
-	  if (buf[i] >= 97 && buf[i] <= 122) {
-	    buf[i] = buf[i] - ('a'-'A');
-	  }
-	}
+  //// just echo everything
+  //while (usbd_ep_write_packet(usbd_dev, 0x82, buf, len) == 0);
+  //return;
 
-	if (len) {
-		while (usbd_ep_write_packet(usbd_dev, 0x82, buf, len) == 0);
-	}
+  if (read_buf_len + len <= BUF_SIZE) {
+    memcpy(&read_buf[read_buf_len], buf, len);
+    read_buf_len += len;
+    read_something = 1;
+  }
 }
 
 static void cdcacm_set_config(usbd_device *usbd_dev, uint16_t wValue)
@@ -240,4 +246,14 @@ usbd_device* cdcacm_init(void)
 
   usbd_register_set_config_callback(usbd_dev, cdcacm_set_config);
   return usbd_dev;
+}
+
+
+int cdcacm_write(usbd_device *usbd_dev, char *buf, int len)
+{
+  if (read_something) {
+    while (usbd_ep_write_packet(usbd_dev, 0x82, buf, len) == 0);
+    return len;
+  }
+  return 0;
 }
