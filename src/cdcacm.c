@@ -27,10 +27,11 @@
 
 #include "cdcacm.h"
 
-#define BUF_SIZE 1024
-static int read_buf_len = 0;
-static char read_buf[BUF_SIZE];
-static int read_something = 0;
+static usbd_device *global_usbd_dev;
+
+volatile int read_buf_len = 0;
+char read_buf[BUF_SIZE];
+volatile int read_something = 0;
 
 static const struct usb_device_descriptor dev = {
 	.bLength = USB_DT_DEVICE_SIZE,
@@ -236,16 +237,16 @@ static void cdcacm_set_config(usbd_device *usbd_dev, uint16_t wValue)
 				cdcacm_control_request);
 }
 
+
 usbd_device* cdcacm_init(void)
 {
-  usbd_device *usbd_dev;
-  usbd_dev = usbd_init(&otghs_usb_driver, &dev, &config,
-		       usb_strings, 3,
-		       usbd_control_buffer,
-		       sizeof(usbd_control_buffer));
+  global_usbd_dev = usbd_init(&otghs_usb_driver, &dev, &config,
+			      usb_strings, 3,
+			      usbd_control_buffer,
+			      sizeof(usbd_control_buffer));
 
-  usbd_register_set_config_callback(usbd_dev, cdcacm_set_config);
-  return usbd_dev;
+  usbd_register_set_config_callback(global_usbd_dev, cdcacm_set_config);
+  return global_usbd_dev;
 }
 
 
