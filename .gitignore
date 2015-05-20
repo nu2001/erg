@@ -1,0 +1,6 @@
+TAGS
+*.d
+*.o
+*.bin
+*.elf
+*.map
