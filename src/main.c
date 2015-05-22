@@ -8,7 +8,6 @@
 #include <libopencm3/stm32/dac.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/rcc.h>
-#include <libopencm3/usb/usbd.h>
 
 #include "cdcacm.h"
 #include "tick.h"
@@ -16,14 +15,14 @@
 #define LED_DISCO_GREEN_PORT GPIOG
 #define LED_DISCO_GREEN_PIN GPIO13
 
-static usbd_device *usbd_dev;
-
 int _write(int file, char *ptr, int len);
 static void clock_setup(void);
 static void adc_setup(void);
 static void dac_setup(void);
 static uint16_t read_adc_naiive(uint8_t channel);
 static uint16_t read_last_adc(void);
+
+static void capture_data(void);
 
 #define ADC_BUF_SIZE (90*1024)
 static uint16_t adc_data[ADC_BUF_SIZE];
@@ -40,61 +39,32 @@ int main(void)
 		  GPIO13 | GPIO14 | GPIO15);
   gpio_set_af(GPIOB, GPIO_AF12, GPIO13 | GPIO14 | GPIO15);
 
-  usbd_dev = cdcacm_init();
+  cdcacm_init();
 
   gpio_mode_setup(LED_DISCO_GREEN_PORT, GPIO_MODE_OUTPUT,
-  GPIO_PUPD_NONE, LED_DISCO_GREEN_PIN);
+		  GPIO_PUPD_NONE, LED_DISCO_GREEN_PIN);
 
-  int j = 0;
-  uint32_t wake = system_millis + 1000;
   uint16_t input_adc0 = read_adc_naiive(0);
 
-  while (1) {
-    if (wake < system_millis) {
-      // uint16_t input_adc0 = read_adc_naiive(0);
-      // uint16_t target = input_adc0 / 2;
-      // dac_load_data_buffer_single(target, RIGHT12, CHANNEL_2);
-      // dac_software_trigger(CHANNEL_2);
-      // uint16_t input_adc1 = read_adc_naiive(1);
-      // printf("tick: %d: adc0= %u, target adc1=%d, adc1=%d\r\n",
-      //        j++, input_adc0, target, input_adc1);
-    
+  while (1)
+  {
+    if (read_buf_len && read_buf[0] == 'p')
+    {
       input_adc0 = read_last_adc();
-      printf("tick: %d: adc0= %u\r\n", j++, input_adc0);
-
-      /* LED on/off */
+      printf("adc0 = %u\r\n", input_adc0);
       gpio_toggle(LED_DISCO_GREEN_PORT, LED_DISCO_GREEN_PIN);
-      wake = system_millis + 1000;
     }
 
-    if (read_buf_len && read_buf[0] == 'a') {
-      uint32_t start_time, end_time;
-      start_time = system_millis;
-      for (j=0; j<ADC_BUF_SIZE; j++)
-	adc_data[j] = read_last_adc();
-      end_time = system_millis;
-
-      usbd_poll(usbd_dev);
-      printf("Collected %d samples in %u ms\r\n",
-	     ADC_BUF_SIZE, end_time-start_time);
-
-      uint16_t min = 0xffff, max=0;
-      uint32_t mean=0;
-      for (j=0; j<ADC_BUF_SIZE; j++){
-	min = (adc_data[j] < min) ? adc_data[j] : min;
-	max = (adc_data[j] > max) ? adc_data[j] : max;
-	mean += adc_data[j];
-      }
-      mean /= ADC_BUF_SIZE;
-      printf("  min = %u, max = %u, mean = %u\r\n",
-	     min, max, mean);
-      
+    if (read_buf_len && read_buf[0] == 'c')
+    {
+      gpio_toggle(LED_DISCO_GREEN_PORT, LED_DISCO_GREEN_PIN);
+      capture_data();
+      gpio_toggle(LED_DISCO_GREEN_PORT, LED_DISCO_GREEN_PIN);
     }
 
     read_buf_len = 0;
-    usbd_poll(usbd_dev);
+    cdcacm_poll();
   }
-
 }
 
 
@@ -131,7 +101,7 @@ static void clock_setup(void)
 int _write(int file, char *ptr, int len)
 {
   if (file == STDOUT_FILENO || file == STDERR_FILENO) {
-    return cdcacm_write(usbd_dev, ptr, len);
+    return cdcacm_write(ptr, len);
   }
   errno = EIO;
   return -1;
@@ -176,4 +146,23 @@ static uint16_t read_last_adc(void)
   adc_start_conversion_regular(ADC1);
   while (!adc_eoc(ADC1));
   return adc_read_regular(ADC1);
+}
+
+static void capture_data(void)
+{
+  int i;
+  uint32_t start_time, end_time;
+  start_time = system_millis;
+  for (i=0; i<ADC_BUF_SIZE; i++)
+  {
+    adc_data[i] = read_last_adc();
+  }
+  end_time = system_millis;
+
+  printf("c %d %u %u\r\n", ADC_BUF_SIZE, start_time, end_time);
+  for (i=0; i<ADC_BUF_SIZE; i++)
+  {
+    printf("s %d\r\n", adc_data[i]);
+  }
+  printf("d\r\n");
 }

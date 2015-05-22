@@ -238,7 +238,7 @@ static void cdcacm_set_config(usbd_device *usbd_dev, uint16_t wValue)
 }
 
 
-usbd_device* cdcacm_init(void)
+void cdcacm_init(void)
 {
   global_usbd_dev = usbd_init(&otghs_usb_driver, &dev, &config,
 			      usb_strings, 3,
@@ -246,15 +246,19 @@ usbd_device* cdcacm_init(void)
 			      sizeof(usbd_control_buffer));
 
   usbd_register_set_config_callback(global_usbd_dev, cdcacm_set_config);
-  return global_usbd_dev;
 }
 
 
-int cdcacm_write(usbd_device *usbd_dev, char *buf, int len)
+int cdcacm_write(char *buf, int len)
 {
   if (read_something) {
-    while (usbd_ep_write_packet(usbd_dev, 0x82, buf, len) == 0);
+    while (usbd_ep_write_packet(global_usbd_dev, 0x82, buf, len) == 0);
     return len;
   }
   return 0;
+}
+
+void cdcacm_poll(void)
+{
+  usbd_poll(global_usbd_dev);
 }
