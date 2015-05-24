@@ -16,7 +16,10 @@ num_samples = int(values[1])
 start_time_ms = int(values[2])
 end_time_ms = int(values[3])
 
-print('ns: {}, st: {}, et: {}'.format(num_samples, start_time_ms, end_time_ms))
+#print('ns: {}, st: {}, et: {}'.format(num_samples, start_time_ms, end_time_ms))
+samples_per_sec = float(num_samples)*1000.0/(end_time_ms-start_time_ms)
+print('Captured {} samples in {} ms'.format(num_samples, end_time_ms-start_time_ms))
+print('  {0:.4f} Msamples/sec'.format(samples_per_sec/1e6))
 
 samples = []
 line = port.readline()
@@ -44,7 +47,7 @@ print('received {} samples'.format(len(samples)))
 pickle.dump(samples, open(timestr+'.pickle', 'w'))
 
 plt.plot(samples)
-plt.ylim(-5, 5000)
+plt.ylim(-50, 5050)
 plt.grid('on')
 
 plt.show()

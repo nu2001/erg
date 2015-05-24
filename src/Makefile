@@ -21,7 +21,7 @@ V=1
 
 BINARY = erg
 
-SOURCES = main.c cdcacm.c tick.c
+SOURCES = main.c cdcacm.c clock.c
 
 LDSCRIPT = stm32f429i-discovery.ld
 
