@@ -31,7 +31,6 @@ uint32_t saved_bytes = 0;
 int main(void)
 {
     clock_setup();
-    //rcc_periph_clock_enable(RCC_GPIOA);
     adc_setup();
     dac_setup();
     cdcacm_init();
@@ -86,6 +85,7 @@ int _write(int file, char *ptr, int len)
 
 static void adc_setup(void)
 {
+    rcc_periph_clock_enable(RCC_GPIOA);
     rcc_periph_clock_enable(RCC_ADC1);
 
     gpio_mode_setup(GPIOA, GPIO_MODE_ANALOG, GPIO_PUPD_NONE, GPIO0);

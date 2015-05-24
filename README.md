@@ -5,3 +5,4 @@ Namely the following ones:
 - usb_cdcacm
 - tick_blink
 - lcd-dma
+- lcd-serial (font)
