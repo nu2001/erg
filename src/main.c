@@ -12,6 +12,8 @@
 
 #include "cdcacm.h"
 #include "clock.h"
+#include "sdram.h"
+#include "lcd-dma.h"
 
 #define LED_DISCO_GREEN_PORT GPIOG
 #define LED_DISCO_GREEN_PIN GPIO13
@@ -34,6 +36,8 @@ int main(void)
     adc_setup();
     dac_setup();
     cdcacm_init();
+    sdram_init();
+    lcd_dma_init();
 
     /* Enable GPIOD clock for LED */
     rcc_periph_clock_enable(RCC_GPIOG);
