@@ -10,6 +10,8 @@
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/rcc.h>
 
+#include <libopencm3/cm3/nvic.h>
+
 #include "cdcacm.h"
 #include "clock.h"
 #include "sdram.h"
@@ -23,12 +25,13 @@ static void adc_setup(void);
 static void dac_setup(void);
 static uint16_t read_adc_naiive(uint8_t channel);
 static uint16_t read_last_adc(void);
-
 static void capture_data(void);
 
 #define ADC_BUF_SIZE (90*1024)
 static uint16_t adc_data[ADC_BUF_SIZE];
 uint32_t saved_bytes = 0;
+
+static volatile int adc_interrupt = 0;
 
 int main(void)
 {
@@ -44,7 +47,9 @@ int main(void)
     gpio_mode_setup(LED_DISCO_GREEN_PORT, GPIO_MODE_OUTPUT,
                     GPIO_PUPD_NONE, LED_DISCO_GREEN_PIN);
 
-    uint16_t input_adc0 = read_adc_naiive(0);
+    uint16_t input_adc0;// = read_adc_naiive(0);
+
+    gpio_toggle(LED_DISCO_GREEN_PORT, LED_DISCO_GREEN_PIN);
 
     while (1)
     {
@@ -60,6 +65,12 @@ int main(void)
             gpio_toggle(LED_DISCO_GREEN_PORT, LED_DISCO_GREEN_PIN);
             capture_data();
             gpio_toggle(LED_DISCO_GREEN_PORT, LED_DISCO_GREEN_PIN);
+        }
+
+        if (adc_interrupt)
+        {
+            printf("ADC interrupt = %d\r\n", adc_interrupt);
+            adc_interrupt = 0;
         }
 
         read_buf_len = 0;
@@ -99,9 +110,45 @@ static void adc_setup(void)
     adc_disable_scan_mode(ADC1);
     adc_set_sample_time_on_all_channels(ADC1, ADC_SMPR_SMP_3CYC);
 
+    adc_disable_scan_mode(ADC1);
+    uint8_t channel_array[16];
+    channel_array[0] = ADC_CHANNEL0;
+    adc_set_regular_sequence(ADC1, 1, channel_array);
+    //adc_set_single_conversion_mode(ADC1);
+    adc_set_continuous_conversion_mode(ADC1);
+
+    adc_set_watchdog_high_threshold(ADC1, 0xE00);
+    adc_set_watchdog_low_threshold(ADC1, 0x200);
+    adc_enable_analog_watchdog_on_all_channels(ADC1);
+    adc_enable_analog_watchdog_regular(ADC1);
+
+    nvic_enable_irq(NVIC_ADC_IRQ);
+    adc_enable_awd_interrupt(ADC1);
+
+    //adc_set_resolution(ADC1, ADC_CR1_RES_12BIT); // or 10, 8, 6 - faster
+
+
     adc_power_on(ADC1);
+    adc_start_conversion_regular(ADC1);
+
+
+    // in configuration
 }
 
+
+
+void adc_isr(void)
+{
+    adc_interrupt += 1;
+
+    if (ADC_SR(ADC1) & ADC_SR_AWD)
+    {
+        ADC_SR(ADC1) &= ~ADC_SR_AWD;
+    }
+
+    gpio_toggle(LED_DISCO_GREEN_PORT, LED_DISCO_GREEN_PIN);
+    //adc_disable_awd_interrupt(ADC1);
+}
 
 static void dac_setup(void)
 {
@@ -143,7 +190,8 @@ static void capture_data(void)
     }
     end_time = mtime();
 
-    printf("c %d %"PRIu32" %"PRIu32"\r\n", ADC_BUF_SIZE, start_time, end_time);
+    printf("c %d %"PRIu32" %"PRIu32"\r\n",
+           ADC_BUF_SIZE, start_time, end_time);
     for (i=0; i<ADC_BUF_SIZE; i++)
     {
         printf("s %"PRIu16"\r\n", adc_data[i]);
