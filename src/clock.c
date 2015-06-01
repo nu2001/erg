@@ -23,14 +23,16 @@
  */
 
 #include <libopencm3/stm32/rcc.h>
+#include <libopencm3/stm32/timer.h>
 #include <libopencm3/cm3/nvic.h>
 #include <libopencm3/cm3/systick.h>
+
 
 /* Common function descriptions */
 #include "clock.h"
 
 /* milliseconds since boot */
-static volatile uint32_t system_millis;
+static volatile uint32_t system_millis = 0;
 
 /* Called when systick fires */
 void sys_tick_handler(void)
@@ -48,9 +50,15 @@ void milli_sleep(uint32_t delay)
 }
 
 /* Getter function for the current time */
-uint32_t mtime(void)
+uint32_t get_time_ms(void)
 {
     return system_millis;
+}
+
+/** Note: this will overflow after about 71 minutes!!! */
+uint32_t get_time_us(void)
+{
+    return timer_get_counter(TIM2);
 }
 
 /*
@@ -59,6 +67,8 @@ uint32_t mtime(void)
  * This function sets up both the base board clock rate
  * and a 1khz "system tick" count. The SYSTICK counter is
  * a standard feature of the Cortex-M series.
+ *
+ * It also sets up a microsecond counter (tied two counters together)
  */
 void clock_setup(void)
 {
@@ -69,7 +79,18 @@ void clock_setup(void)
     systick_set_reload(168000);
     systick_set_clocksource(STK_CSR_CLKSOURCE_AHB);
     systick_counter_enable();
-
-    /* this done last */
     systick_interrupt_enable();
+
+    rcc_periph_clock_enable(RCC_TIM1);
+    timer_reset(TIM1);
+    timer_set_period(TIM1, 167);
+    timer_set_master_mode(TIM1, TIM_CR2_MMS_UPDATE);
+
+    rcc_periph_clock_enable(RCC_TIM2);
+    timer_reset(TIM2);
+    timer_slave_set_trigger(TIM2, TIM_SMCR_TS_ITR0);
+    timer_slave_set_mode(TIM2, TIM_SMCR_SMS_ECM1);
+
+    timer_enable_counter(TIM1);
+    timer_enable_counter(TIM2);
 }

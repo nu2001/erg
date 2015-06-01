@@ -23,7 +23,6 @@
 int _write(int file, char *ptr, int len);
 static void adc_setup(void);
 static void dac_setup(void);
-static uint16_t read_adc_naiive(uint8_t channel);
 static uint16_t read_last_adc(void);
 static void capture_data(void);
 
@@ -46,17 +45,20 @@ int main(void)
     rcc_periph_clock_enable(RCC_GPIOG);
     gpio_mode_setup(LED_DISCO_GREEN_PORT, GPIO_MODE_OUTPUT,
                     GPIO_PUPD_NONE, LED_DISCO_GREEN_PIN);
-
-    uint16_t input_adc0;// = read_adc_naiive(0);
-
     gpio_toggle(LED_DISCO_GREEN_PORT, LED_DISCO_GREEN_PIN);
 
+
+    adc_enable_awd_interrupt(ADC1);
+
+    uint16_t adc0_value;
     while (1)
     {
         if (read_buf_len && read_buf[0] == 'p')
         {
-            input_adc0 = read_last_adc();
-            printf("adc0 = %"PRIu16"\r\n", input_adc0);
+            adc0_value = read_last_adc();
+            printf("adc0 = %"PRIu16"\r\n", adc0_value);
+            printf("  time ms = %"PRIu32", us = %"PRIu32"\r\n",
+                   get_time_ms(), get_time_us());
             gpio_toggle(LED_DISCO_GREEN_PORT, LED_DISCO_GREEN_PIN);
         }
 
@@ -69,7 +71,9 @@ int main(void)
 
         if (adc_interrupt)
         {
-            printf("ADC interrupt = %d\r\n", adc_interrupt);
+            adc0_value = read_last_adc();
+            printf("ADC interrupt = %d, val = %"PRIu16"\r\n",
+                   adc_interrupt, adc0_value);
             adc_interrupt = 0;
         }
 
@@ -114,31 +118,33 @@ static void adc_setup(void)
     uint8_t channel_array[16];
     channel_array[0] = ADC_CHANNEL0;
     adc_set_regular_sequence(ADC1, 1, channel_array);
-    //adc_set_single_conversion_mode(ADC1);
     adc_set_continuous_conversion_mode(ADC1);
 
-    adc_set_watchdog_high_threshold(ADC1, 0xE00);
-    adc_set_watchdog_low_threshold(ADC1, 0x200);
+    /* get ready to detect rising edge*/
+    adc_set_watchdog_high_threshold(ADC1, 2000);
+    adc_set_watchdog_low_threshold(ADC1, 0);
+
     adc_enable_analog_watchdog_on_all_channels(ADC1);
     adc_enable_analog_watchdog_regular(ADC1);
 
     nvic_enable_irq(NVIC_ADC_IRQ);
-    adc_enable_awd_interrupt(ADC1);
 
     //adc_set_resolution(ADC1, ADC_CR1_RES_12BIT); // or 10, 8, 6 - faster
 
-
     adc_power_on(ADC1);
     adc_start_conversion_regular(ADC1);
-
-
-    // in configuration
 }
 
 
 
 void adc_isr(void)
 {
+    static const int ST_RISING = 1;
+    static const int ST_FALLING = 2;
+    static int state = ST_RISING;
+
+    adc_disable_awd_interrupt(ADC1);
+
     adc_interrupt += 1;
 
     if (ADC_SR(ADC1) & ADC_SR_AWD)
@@ -146,8 +152,24 @@ void adc_isr(void)
         ADC_SR(ADC1) &= ~ADC_SR_AWD;
     }
 
-    gpio_toggle(LED_DISCO_GREEN_PORT, LED_DISCO_GREEN_PIN);
-    //adc_disable_awd_interrupt(ADC1);
+    if (state == ST_RISING)
+    {
+        /* Get ready to detect falling edge */
+        adc_set_watchdog_high_threshold(ADC1, 0xffff);
+        adc_set_watchdog_low_threshold(ADC1, 2000);
+        gpio_set(LED_DISCO_GREEN_PORT, LED_DISCO_GREEN_PIN);
+        state = ST_FALLING;
+    }
+    else
+    {
+        /* Get ready to detect rising edge */
+        adc_set_watchdog_high_threshold(ADC1, 2000);
+        adc_set_watchdog_low_threshold(ADC1, 0);
+        gpio_clear(LED_DISCO_GREEN_PORT, LED_DISCO_GREEN_PIN);
+        state = ST_RISING;
+    }
+
+    adc_enable_awd_interrupt(ADC1);
 }
 
 static void dac_setup(void)
@@ -161,20 +183,8 @@ static void dac_setup(void)
     dac_set_trigger_source(DAC_CR_TSEL2_SW);
 }
 
-static uint16_t read_adc_naiive(uint8_t channel)
-{
-    uint8_t channel_array[16];
-    channel_array[0] = channel;
-    adc_set_regular_sequence(ADC1, 1, channel_array);
-    adc_start_conversion_regular(ADC1);
-    while (!adc_eoc(ADC1));
-    uint16_t reg16 = adc_read_regular(ADC1);
-    return reg16;
-}
-
 static uint16_t read_last_adc(void)
 {
-    adc_start_conversion_regular(ADC1);
     while (!adc_eoc(ADC1));
     return adc_read_regular(ADC1);
 }
@@ -183,12 +193,12 @@ static void capture_data(void)
 {
     int i;
     uint32_t start_time, end_time;
-    start_time = mtime();
+    start_time = get_time_us();
     for (i=0; i<ADC_BUF_SIZE; i++)
     {
         adc_data[i] = read_last_adc();
     }
-    end_time = mtime();
+    end_time = get_time_us();
 
     printf("c %d %"PRIu32" %"PRIu32"\r\n",
            ADC_BUF_SIZE, start_time, end_time);
