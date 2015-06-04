@@ -41,17 +41,13 @@ void gfx_setCursor(int16_t x, int16_t y);
 void gfx_setTextColor(uint16_t c, uint16_t bg);
 void gfx_setTextSize(uint8_t s);
 void gfx_setTextWrap(uint8_t w);
-void gfx_setRotation(uint8_t r);
 void gfx_puts(char *);
 void gfx_write(uint8_t);
-
+void gfx_setRotation(uint8_t, uint32_t, uint32_t);
 uint16_t gfx_height(void);
 uint16_t gfx_width(void);
 
 uint8_t gfx_getRotation(void);
-
-#define GFX_WIDTH   320
-#define GFX_HEIGHT  240
 
 struct gfx_state {
 	int16_t _width, _height, cursor_x, cursor_y;

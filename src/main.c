@@ -16,6 +16,7 @@
 #include "clock.h"
 #include "sdram.h"
 #include "lcd-dma.h"
+#include "gfx.h"
 
 #define LED_DISCO_GREEN_PORT GPIOG
 #define LED_DISCO_GREEN_PIN GPIO13
@@ -40,13 +41,16 @@ int main(void)
     cdcacm_init();
     sdram_init();
     lcd_dma_init();
+    gfx_init(lcd_dma_draw_pixel, LCD_WIDTH, LCD_HEIGHT);
+    gfx_setRotation(2, LCD_WIDTH, LCD_HEIGHT);
+    gfx_setTextSize(5);
+    gfx_setTextColor(GFX_COLOR_WHITE, GFX_COLOR_BLACK);
 
     /* Enable GPIOD clock for LED */
     rcc_periph_clock_enable(RCC_GPIOG);
     gpio_mode_setup(LED_DISCO_GREEN_PORT, GPIO_MODE_OUTPUT,
                     GPIO_PUPD_NONE, LED_DISCO_GREEN_PIN);
     gpio_toggle(LED_DISCO_GREEN_PORT, LED_DISCO_GREEN_PIN);
-
 
     adc_enable_awd_interrupt(ADC1);
 
@@ -75,6 +79,15 @@ int main(void)
             printf("ADC interrupt = %d, val = %"PRIu16"\r\n",
                    adc_interrupt, adc0_value);
             adc_interrupt = 0;
+        }
+
+        if (lcd_dma_buffer_ready())
+        {
+            char str[10];
+            sprintf(str, "%6"PRIu32, get_time_ms() % 1000000);
+            gfx_setCursor(0, 0);
+            gfx_puts(str);
+            lcd_dma_swap_buffers();
         }
 
         read_buf_len = 0;

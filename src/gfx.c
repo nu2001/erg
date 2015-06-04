@@ -514,19 +514,19 @@ uint8_t gfx_getRotation(void)
 	return __gfx_state.rotation;
 }
 
-void gfx_setRotation(uint8_t x)
+void gfx_setRotation(uint8_t x, uint32_t width, uint32_t height)
 {
 	__gfx_state.rotation = (x & 3);
 	switch (__gfx_state.rotation) {
 	case 0:
 	case 2:
-		__gfx_state._width  = GFX_WIDTH;
-		__gfx_state._height = GFX_HEIGHT;
+		__gfx_state._width  = width;
+		__gfx_state._height = height;
 		break;
 	case 1:
 	case 3:
-		__gfx_state._width  = GFX_HEIGHT;
-		__gfx_state._height = GFX_WIDTH;
+		__gfx_state._width  = width;
+		__gfx_state._height = height;
 		break;
 	}
 }
