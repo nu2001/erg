@@ -21,7 +21,8 @@ V=1
 
 BINARY = erg
 
-SOURCES = main.c cdcacm.c clock.c sdram.c lcd-dma.c lcd-spi.c gfx.c font-7x12.c
+SOURCES = main.c cdcacm.c clock.c sdram.c lcd-dma.c lcd-spi.c gfx.c \
+	font-7x12.c ui.c led.c erg.c
 
 LDSCRIPT = stm32f429i-discovery.ld
 

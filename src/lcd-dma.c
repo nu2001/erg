@@ -40,7 +40,7 @@ static layer1_pixel * current_frame_buffer = FRAME_BUFFER_1;
 
 static volatile uint32_t frame_buffer_queue = 0;
 
-bool lcd_dma_buffer_ready(void)
+int lcd_dma_buffer_ready(void)
 {
     return !frame_buffer_queue;
 }
@@ -54,11 +54,10 @@ void lcd_dma_swap_buffers(void)
 void lcd_dma_draw_pixel(int w, int h, uint16_t color)
 {
     int idx = h * LCD_WIDTH + (LCD_WIDTH - w - 1);
-    uint8_t a = 0xFF;
-    uint8_t r = ((color & 0xF800) >> 11) << 3;
-    uint8_t g = ((color & 0x07E0) >> 5) << 2;
-    uint8_t b = (color & 0x1F) << 3;
-    layer1_pixel pix = a << 24 | r << 16 | g << 8 | b << 0;
+    layer1_pixel pix = 0xFF000000  // alpha
+        | (color & 0xF800) << 8    // red
+        | (color & 0x07E0) << 5    // green
+        | (color & 0x1F) << 3;     // blue
     current_frame_buffer[idx] = pix;
 }
 
