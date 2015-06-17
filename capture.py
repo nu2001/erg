@@ -1,13 +1,15 @@
 from __future__ import print_function
 import serial
 import matplotlib.pyplot as plt
+import numpy as np
 import sys
 import time
 import pickle
 
 timestr = time.strftime('%Y%m%d-%H%M%S')
 
-port = serial.Serial('/dev/ttyACM0', 921600)
+#port = serial.Serial('/dev/ttyACM0', 921600)
+port = serial.Serial('/dev/ttyACM0', 2000000)
 
 port.write('c')
 line = port.readline()
@@ -43,9 +45,14 @@ port.close();
 
 print('received {} samples'.format(len(samples)))
 
-pickle.dump(samples, open(timestr+'.pickle', 'w'))
+pickle.dump({'start_time_us': start_time_us,
+             'end_time_us': end_time_us,
+             'samples': samples},
+            open(timestr+'.pickle', 'w'))
 
-plt.plot(samples)
+time_diff = float(end_time_us - start_time_us)
+tl = np.arange(0.0, time_diff, time_diff/len(samples))
+plt.plot(tl, samples)
 plt.ylim(-50, 5050)
 plt.grid('on')
 

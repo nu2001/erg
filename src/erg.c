@@ -2,6 +2,10 @@
 #include <libopencm3/stm32/adc.h>
 #include <libopencm3/cm3/nvic.h>
 
+/**
+ * http://www.atm.ox.ac.uk/rowing/physics/ergometer.html
+ */
+
 #include "erg.h"
 #include "led.h"
 #include "clock.h"
@@ -59,6 +63,20 @@ float erg_get_b(void)
     return b;
 }
 
+float erg_get_rpm(void)
+{
+    if (time_since_last_peak_us)
+    {
+        return 1000000.0f / time_since_last_peak_us;
+    }
+    return 0.0f;
+}
+
+uint32_t erg_get_time_diff(void)
+{
+    return time_since_last_peak_us;
+}
+
 void erg_update(void)
 {
     float last_omega = omega;
@@ -71,36 +89,46 @@ void erg_update(void)
 
 void adc_isr(void)
 {
-    static const int ST_RISING = 1;
-    static const int ST_FALLING = 2;
-    static int state = ST_RISING;
+    //uint16_t value;
+    uint32_t time;
+    uint32_t temp_diff;
+    static uint32_t rising = 1;
 
-    adc_disable_awd_interrupt(ADC1);
+    adc_disable_analog_watchdog_regular(ADC1);
+    //adc_disable_awd_interrupt(ADC1);
+    //value = adc_read_regular(ADC1);
 
     if (ADC_SR(ADC1) & ADC_SR_AWD)
     {
         ADC_SR(ADC1) &= ~ADC_SR_AWD;
     }
 
-    if (state == ST_RISING)
+    if (rising)
     {
-        /* Get ready to detect falling edge */
-        adc_set_watchdog_high_threshold(ADC1, 0xffff);
-        adc_set_watchdog_low_threshold(ADC1, 100);
+        /* rising edge */
         led_set();
-        state = ST_FALLING;
+        time = get_time_us();
+        temp_diff = time - last_peak_time_us;
+        if (temp_diff > 15000)
+        {
+            time_since_last_peak_us = temp_diff;
+            last_peak_time_us = time;
+        }
+        /* get ready to detect falling edge */
+        adc_set_watchdog_high_threshold(ADC1, 0xffff);
+        adc_set_watchdog_low_threshold(ADC1, ERG_ADC_LOW_THRES);
+        rising = 0;
     }
     else
     {
-        /* Get ready to detect rising edge */
-        adc_set_watchdog_high_threshold(ADC1, 100);
-        adc_set_watchdog_low_threshold(ADC1, 0);
+        /* falling edge */
         led_clear();
-        uint32_t t = get_time_us();
-        time_since_last_peak_us = t - last_peak_time_us;
-        last_peak_time_us = t;
-        state = ST_RISING;
+        /* get ready to detect rising edge */
+        adc_set_watchdog_high_threshold(ADC1, ERG_ADC_HIGH_THRES);
+        adc_set_watchdog_low_threshold(ADC1, 0);
+        rising = 1;
     }
 
-    adc_enable_awd_interrupt(ADC1);
+    //adc_enable_awd_interrupt(ADC1);
+    adc_enable_analog_watchdog_regular(ADC1);
 }

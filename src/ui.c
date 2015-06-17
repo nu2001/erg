@@ -10,10 +10,12 @@
 #include <stdio.h>
 #include <inttypes.h>
 
-#define TEXT_SIZE (5)
+#define TEXT_SIZE (3)
 #define TEXT_HEIGHT (12)
 #define TEXT_WIDTH (7)
 #define TEXT_LINE_SIZE TEXT_SIZE*TEXT_HEIGHT
+
+static char str[200];
 
 void ui_init(void)
 {
@@ -28,23 +30,31 @@ void ui_init(void)
 
 void ui_update(void)
 {
-    char str[10];
     if (lcd_dma_buffer_ready())
     {
         gfx_setCursor(0, 0);
-        sprintf(str, "%6"PRIu32, get_time_ms() % 1000000);
+        sprintf(str, "%10"PRIu32, get_time_ms() % 1000000);
+        str[10] = 0;
         gfx_puts(str);
 
         gfx_setCursor(0, TEXT_LINE_SIZE);
-        sprintf(str, "%3.2f", erg_get_omega());
+        sprintf(str, "%10.2f", erg_get_omega());
+        str[10] = 0;
         gfx_puts(str);
 
         gfx_setCursor(0, 2*TEXT_LINE_SIZE);
-        sprintf(str, "%3.2f", erg_get_b());
+        sprintf(str, "%10"PRIu32, erg_get_time_diff());
+        str[10] = 0;
         gfx_puts(str);
 
         gfx_setCursor(0, 3*TEXT_LINE_SIZE);
-        sprintf(str, "%3.2f", erg_get_power());
+        sprintf(str, "%10.2f", erg_get_power());
+        str[10] = 0;
+        gfx_puts(str);
+        
+        gfx_setCursor(0, 4*TEXT_LINE_SIZE);
+        sprintf(str, "%10.2f", erg_get_rpm());
+        str[10] = 0;
         gfx_puts(str);
         
         lcd_dma_swap_buffers();

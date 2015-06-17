@@ -104,10 +104,14 @@ static void adc_init(void)
     adc_set_continuous_conversion_mode(ADC1);
 
     /* get ready to detect rising edge*/
-    adc_set_watchdog_high_threshold(ADC1, 2000);
+    adc_set_watchdog_high_threshold(ADC1, ERG_ADC_HIGH_THRES);
     adc_set_watchdog_low_threshold(ADC1, 0);
 
-    adc_enable_analog_watchdog_on_all_channels(ADC1);
+    //adc_set_sample_time(ADC1, ADC_CR1_AWDCH_CHANNEL0,
+    //                    ADC_SMPR_SMP_144CYC);
+    adc_set_sample_time(ADC1, ADC_CR1_AWDCH_CHANNEL0,
+                        ADC_SMPR_SMP_480CYC);
+    adc_enable_analog_watchdog_on_selected_channel(ADC1, ADC_CR1_AWDCH_CHANNEL0);
     adc_enable_analog_watchdog_regular(ADC1);
 
     //adc_set_resolution(ADC1, ADC_CR1_RES_12BIT); // or 10, 8, 6 - faster
@@ -132,7 +136,7 @@ static void capture_data(void)
     for (i=0; i<ADC_BUF_SIZE; i++)
     {
         adc_data[i] = read_last_adc();
-        for (j=0; j<20; j++)
+        for (j=0; j<50; j++)
         {
             asm("nop");
         }
