@@ -29,11 +29,13 @@ uint32_t saved_bytes = 0;
 
 int main(void)
 {
+    struct erg_status_s status;
+
     clock_setup();
     led_init();
     adc_init();
     cdcacm_init();
-    erg_init();
+    erg_init(&status);
     ui_init();
 
     adc_enable_awd_interrupt(ADC1);
@@ -42,6 +44,8 @@ int main(void)
     while (1)
     {
         cdcacm_poll();
+
+        /** print info to console */
         if (read_buf_len && read_buf[0] == 'p')
         {
             adc0_value = read_last_adc();
@@ -51,6 +55,7 @@ int main(void)
             led_toggle();
         }
 
+        /** capture data */
         if (read_buf_len && read_buf[0] == 'c')
         {
             led_toggle();
@@ -58,8 +63,7 @@ int main(void)
             led_toggle();
         }
 
-        erg_update();
-        ui_update();
+        ui_update(&status);
 
         read_buf_len = 0;
     }

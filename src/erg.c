@@ -1,6 +1,8 @@
-
 #include <libopencm3/stm32/adc.h>
 #include <libopencm3/cm3/nvic.h>
+
+#include <math.h>
+#include <string.h>
 
 /**
  * http://www.atm.ox.ac.uk/rowing/physics/ergometer.html
@@ -12,92 +14,97 @@
 
 #define STROKE 1
 #define RECOVERY 2
-uint32_t stroke_state = RECOVERY;
 
-/** time of last peak */
-static uint32_t last_peak_time_us = 0;
-/** delta between peaks */
-static volatile uint32_t time_since_last_peak_us = 0;
+static const float INERTIA = 0.1001f; /** moment of inertia */
+static const float DIST_CONST = 2.8f; /** concept2 const for dist conversion */
 
-/** angular velocity in rad/s */
-static float omega = 0.0f;
-/** angular acceleration */
-static float b = 0.0f;
+static volatile uint32_t revs_counter = 0;
 
-/** moment of inertia */
-static const float I = 1.0f;
-
-
-/** drag factor */
-static float k = 1.0;
-static float recovery_start_omega = 0.0f;
-static float recovery_end_omega = 0.1f;
-static float recovery_start_time = 0.0f;
-static float recovery_end_time = 0.1f;
-
-void erg_init(void)
+void erg_init(struct erg_status_s * status)
 {
     nvic_enable_irq(NVIC_ADC_IRQ);
+    memset(status, 0, sizeof(struct erg_status_s));
+    status->drag_factor = 150.f; //< initial guess in mid range
 }
 
-float erg_drag_factor(void);
-float erg_drag_factor(void)
+void erg_update_status(struct erg_status_s * status)
 {
-    return I \
-        / (recovery_end_omega - recovery_start_omega) \
-        / (recovery_end_time - recovery_start_time);
-}
+    /** do the erg math here */
+    uint32_t time_ms = get_time_ms();
+    status->elapsed_time = 1000.0f * time_ms;
 
-float erg_get_power(void)
-{
-    return k * omega * omega * omega;
-}
+    uint32_t revs_time = get_time_us();
+    uint32_t revs = revs_counter;
+    revs_counter = 0; /** reset revs counter. Will be incremented in adc_isr */
 
-float erg_get_omega(void)
-{
-    return omega;
-}
-
-float erg_get_b(void)
-{
-    return b;
-}
-
-float erg_get_rpm(void)
-{
-    if (time_since_last_peak_us)
+    static uint32_t last_revs_time = 0;
+    uint32_t d_revs_time;
+    if (revs_time >= last_revs_time)
     {
-        return 1000000.0f / time_since_last_peak_us;
+        d_revs_time = revs_time - last_revs_time;
     }
-    return 0.0f;
-}
-
-uint32_t erg_get_time_diff(void)
-{
-    return time_since_last_peak_us;
-}
-
-void erg_update(void)
-{
-    float last_omega = omega;
-    if (time_since_last_peak_us)
+    else
     {
-        omega = 1.0e6 / time_since_last_peak_us;
-        b = (omega - last_omega) / time_since_last_peak_us;
+        /** timer wrapped around (see get_time_us comment) */
+        d_revs_time = 0xffffffff - last_revs_time + revs_time;
     }
+    last_revs_time = revs_time;
+
+    static float last_angular_speed = 0.f;
+    float angular_speed = (float)revs / d_revs_time;
+    float angular_accel = (angular_speed - last_angular_speed) / (d_revs_time);
+    last_angular_speed = angular_speed;
+
+    status->distance += pow(status->drag_factor / DIST_CONST, 1.f / 3) *
+        M_PI * 2 * revs;
+
+    static uint32_t last_stroke_state = RECOVERY;
+    uint32_t stroke_state = angular_accel > 0.f ? STROKE : RECOVERY;
+    if (last_stroke_state != stroke_state)
+    {
+        static float stroke_start_speed = 0.f;
+        static uint32_t stroke_start_time_ms = 0;
+        static float recovery_start_speed = 0.f;
+        static uint32_t recovery_start_time_ms = 0;
+        static float recovery_start_distance = 0.f;
+
+        if (stroke_state == STROKE)
+        {
+            stroke_start_time_ms = time_ms;
+            stroke_start_speed = angular_speed;
+            /** calculate drag from recovery */
+            float d_speed = recovery_start_speed - stroke_start_speed;
+            uint32_t d_time = recovery_start_time_ms - stroke_start_time_ms;
+            status->drag_factor = INERTIA * (1.0f / d_speed) / d_time;
+        }
+        else
+        {
+            /** End of stroke updates */
+            float d_dist = status->distance - recovery_start_distance;
+            uint32_t d_time = time_ms - recovery_start_time_ms;
+            status->strokes_per_min = 60.f / d_time;
+
+            float avg_stroke_speed = d_dist / d_time;
+            status->split = 500.f / avg_stroke_speed;
+            float avg_speed = status->distance / status->elapsed_time;
+            status->average_split = 500.f / avg_speed;
+
+            recovery_start_time_ms = time_ms;
+            recovery_start_speed = angular_speed;
+            recovery_start_distance = status->distance;
+        }
+    }
+    last_stroke_state = stroke_state;
 }
+
 
 void adc_isr(void)
 {
-    //uint16_t value;
-    uint32_t time;
-    uint32_t temp_diff;
     static uint32_t rising = 1;
 
     adc_disable_analog_watchdog_regular(ADC1);
-    //adc_disable_awd_interrupt(ADC1);
-    //value = adc_read_regular(ADC1);
 
+    /* clear interrupt flags */
     if (ADC_SR(ADC1) & ADC_SR_AWD)
     {
         ADC_SR(ADC1) &= ~ADC_SR_AWD;
@@ -107,13 +114,6 @@ void adc_isr(void)
     {
         /* rising edge */
         led_set();
-        time = get_time_us();
-        temp_diff = time - last_peak_time_us;
-        if (temp_diff > 15000)
-        {
-            time_since_last_peak_us = temp_diff;
-            last_peak_time_us = time;
-        }
         /* get ready to detect falling edge */
         adc_set_watchdog_high_threshold(ADC1, 0xffff);
         adc_set_watchdog_low_threshold(ADC1, ERG_ADC_LOW_THRES);
@@ -127,8 +127,8 @@ void adc_isr(void)
         adc_set_watchdog_high_threshold(ADC1, ERG_ADC_HIGH_THRES);
         adc_set_watchdog_low_threshold(ADC1, 0);
         rising = 1;
+        revs_counter += 1;
     }
 
-    //adc_enable_awd_interrupt(ADC1);
     adc_enable_analog_watchdog_regular(ADC1);
 }
