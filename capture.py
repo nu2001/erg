@@ -9,7 +9,7 @@ import pickle
 timestr = time.strftime('%Y%m%d-%H%M%S')
 
 #port = serial.Serial('/dev/ttyACM0', 921600)
-port = serial.Serial('/dev/ttyACM0', 2000000)
+port = serial.Serial('/dev/tty.usbmodemDEM1', 2000000)
 
 port.write('c')
 line = port.readline()

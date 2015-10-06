@@ -81,6 +81,7 @@ SCRIPT_DIR	= $(OPENCM3_DIR)/scripts
 CFLAGS		+= -O0 -g
 CFLAGS		+= -Wextra -Wshadow -Wimplicit-function-declaration
 CFLAGS		+= -Wredundant-decls -Wmissing-prototypes -Wstrict-prototypes
+CFLAGS          += -Wdouble-promotion
 CFLAGS		+= -fno-common -ffunction-sections -fdata-sections
 
 ###############################################################################

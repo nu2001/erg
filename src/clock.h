@@ -12,6 +12,7 @@
 void milli_sleep(uint32_t);
 uint32_t get_time_ms(void);
 uint32_t get_time_us(void);
+uint32_t get_delta_time(uint32_t start, uint32_t end);
 void clock_setup(void);
 
 #endif /* generic header protector */

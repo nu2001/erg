@@ -4,3 +4,7 @@ TAGS
 *.bin
 *.elf
 *.map
+*.pickle
+GPATH
+GRTAGS
+GTAGS

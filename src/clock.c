@@ -61,6 +61,16 @@ uint32_t get_time_us(void)
     return timer_get_counter(TIM2);
 }
 
+/** Account for integer overflow */
+uint32_t get_delta_time(uint32_t start, uint32_t end)
+{
+    if (end < start)
+    {
+        return 0xFFFFFFFF - start + end;
+    }
+    return end - start;
+}
+
 /*
  * clock_setup(void)
  *
